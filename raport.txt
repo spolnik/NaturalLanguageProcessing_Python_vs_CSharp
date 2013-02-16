@@ -1,0 +1,103 @@
+﻿RAPORT RW 2010 - Jacek Spólnik.
+
+1. Wstęp.
+
+Przepraszam że dopiero teraz, niestety na początku miałem problemy z siecią w domu 
+i nie mogłem bezpośrednio pracować na wierzbie. Dlatego sam projekt miał dwa przebiegi:
+
+a) wygenerowałem odpowiednie dane z CLP aby stworzyć własną bazę danych. 
+Jako bazę wybrałem SQL Server Compact Edition 3.5 jako że jest przechowywana w jednym pliku
+i działa bardzo szybko (możemy zakładać indeks na odpowiednie dane) + projekt w języku C#. 
+Baza danych składała się z dwóch tabel:
+
+BaseWords:
+ * ID (PK)
+ * BaseForm
+ * Label
+ * Prefix (wygenerowany na podstawie base form i forms)
+Forms
+ * ID (FK)
+ * Form
+ 
+Dane do bazy danych generowałem skryptem 'preprocess.py'
+(http://www.assembla.com/code/RW_2010/subversion/nodes/PYTHON_PROJECT/ReprWiedz/src?rev=6), 
+sprawdzanie czy dane znajdują się w CLP (początkowe testy) znajduje się w pliku 
+'checker.py' w tej samej lokacji.
+
+Cały kod projektu w tej wersji znajduje się pod adresem(poza samą bazą > 100 MB !): 
+http://www.assembla.com/code/RW_2010/subversion/nodes/CSHARP%20PROJECT/RW_2010?rev=6
+
+Problemy, dlaczego zrezygnowałem:
+ * pomimo szybkości rozwiązania (w stosunku do aktualnej wersji w pythonie) pojawił się 
+ znaczący problem, mianowicie bazy tego typu mają jedną malutką słabość, gdy ich rozmiar 
+ zaczyna przekraczać 100 MB dzieją się z nimi nie za dobre rzeczy. Dodatkowo indeksy 
+ nakładane na tę bazę przy jej początkowym rozmiarze 116 MB podczas operowania na niej 
+ rosły przekraczając 129 MB co jest maksymalnym rozmiarem domyślnym takiej bazy, później 
+ efektywność i niezawodność niestety spada. Zatem postanowiłem przenieść funkcjonalność 
+ na pythona i pracować nadal lokalnie (problemy z wifi), ale ściągnąłem lokalnie CLP 
+ i wszystko działa:)
+ 
+b) projekt w pythonie. Składa się z 6 głównych elementów:
+ * 'formy.txt' - plik z formami wyrazów występujących w CLP 
+ (ściągniety z katalogu /usr/local/plp/lab02/ lub podobnego)
+ 
+ * 'application.py' - plik uruchomieniowy aplikacji, przyjmuje nazwe pliku,
+ który ma analizować i nazwę pliku wyjściowego(raport) tutaj należy zaznaczyć, 
+ że aktualnie w linice:
+
+plp.plp_init()
+# change encoding - encoding input
+--> text_checker.process(sys.argv[1], text_checker.utf_encoding())
+
+należy zmienić drugi argument, jeśli kodowanie jest różne. 
+text_checker defniuje jeszcze jeden typ kodowania -> 'default_encoding()' 
+odpowiadający 'iso-8859-2'
+
+ * 'text_checker.py' - zawiera moduł służący do analizy tekstu wejściowego
+ 
+ * 'streamming.py' - zawiera definicję klasy służącej do wykonywania streammingu 
+ na pojedynczym słowie
+ 
+ * 'utility.py' - moduł zawierające pomocne metody
+ * 'plp.py' - wraper na clp napisany przez Pana ;)
+ 
+2. Opis aktualnego rozwiązania.
+
+ * użytkownik ustawia (aktualnie) kodowanie pliku wejściowego w 'application.py'
+ (wspomniane powyżej) i podaje nazwy plików wejściowego i wyjściowego (raport)
+ 
+ * program następnie wywołuję metodę process modułu text_checker która przetwarza
+ plik wejściowy - 'text_checker' definiuje trzy wynikowe słowniki, 'results', 'shortcuts',
+ oraz 'rome' (liczby rzymskie)
+ 
+ * dla pliku wejściowego dzielimy linie na słowa (słowa o długości 0, 1, 2 są pomijane)
+ i sprawdzamy czy występują w clp,  jeśli nie to następuje dalsze przetwarzanie słowa - 
+ jeśli słowo składa się z 3 liter lub wszystkie litery są 'UPPER' - jeśli składa się 
+ tylko z liter "rzymskich liczb" to  dodawny do rome, jesli nie to dodawany do shortcuts.
+ W przeciwnym wypadku słowo jest dodawne do results jako potencjalny kandydat do streammingu.
+ 
+ * Wypisujemy 'shortcuts' i 'rome', następnie przechodzimy do streammingu słów znajdujących się
+ w results z tym że, sprawdzamy czy w już wygenerowanych przez nas nowych formach znajduje się
+ już interesujące nas słowo - wówczas pomijamy
+ 
+ * Dokonujemy 'streammingu' - jeśli słowo kończy się na 'x' lub najdłuższa podobna końcówka 
+ wynosi 0 lub 1(performance, probability niskie), wówczas słowo dalej nie jest analizowane tylko wrzucane do stałych posiadających
+ tylko formę bazową (wyświetlane na końcu działania programu)
+ 
+ * 'Streamming' - wyszukujemy słowa w 'formy.txt' których końcówka ma jak najwięcej tożsamych liter
+ z końcówką naszego słowa. Tutaj warto nadmienić że sam plik 'formy.txt' cacheujemy w klasie 
+ FileCache ('utility.py')
+ 
+ * nastepnie tworzymy dla kazdego takeigo slowa Entity (definicja klasy w 'streamming.py'). Na podstawie
+ takiego entity, tworzymy dla naszego slowa analogiczne entity operujac na torzsamych końcówkach 
+ (dodając je i ucinając z prefixu)
+ 
+ * aplikacja wypisuje najpierw poszczegolne informacje dla słów posiadających odmiane, a później
+ wypisuje słowa posiadające tylko formę bazową.
+ 
+3. Testy
+zostały wykonane dwa testy
+
+a) 'pap-100.not' z raportem w 'pap-100.not.output'
+b) 'test_rw' (testy z Pańskiego pdf) z raportem w 'test_rw.output'
+  
